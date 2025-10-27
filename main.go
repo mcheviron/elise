@@ -2,16 +2,18 @@ package main
 
 import (
 	"encoding/binary"
+	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net"
+
+	"github.com/mcheviron/boring-kafka/internal/protocol"
 )
 
 const (
 	// kafkaPort is the default port used by Kafka brokers.
 	kafkaPort = ":9092"
-	// hard-coded correlation ID required by the current stage.
-	correlationID = 7
 )
 
 func main() {
@@ -40,39 +42,50 @@ func handleConnection(conn net.Conn) {
 	peer := conn.RemoteAddr().String()
 	log.Printf("client connected: %s", peer)
 
-	var responseSent bool
-	buffer := make([]byte, 1024)
-
 	for {
-		n, err := conn.Read(buffer)
-		if n > 0 {
-			log.Printf("received %d bytes from %s", n, peer)
-			if !responseSent {
-				if err := sendCorrelationResponse(conn); err != nil {
-					log.Printf("failed to send response to %s: %v", peer, err)
-					return
-				}
-				responseSent = true
+		req, err := readRequest(conn)
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				log.Printf("client disconnected: %s", peer)
+				break
 			}
+			log.Printf("read request error from %s: %v", peer, err)
+			break
 		}
 
-		if err != nil {
-			if err != io.EOF {
-				log.Printf("connection error with %s: %v", peer, err)
-			} else {
-				log.Printf("client disconnected: %s", peer)
-			}
-			return
+		log.Printf("received request api_key=%d api_version=%d correlation_id=%d", req.Header.APIKey, req.Header.APIVersion, req.Header.CorrelationID)
+
+		if err := sendCorrelationResponse(conn, req.Header.CorrelationID); err != nil {
+			log.Printf("failed to send response to %s: %v", peer, err)
+			break
 		}
 	}
 }
 
-func sendCorrelationResponse(conn net.Conn) error {
+func readRequest(conn net.Conn) (*protocol.Request, error) {
+	var sizeBuf [4]byte
+	if _, err := io.ReadFull(conn, sizeBuf[:]); err != nil {
+		return nil, err
+	}
+
+	messageSize := int32(binary.BigEndian.Uint32(sizeBuf[:]))
+	if messageSize < 0 {
+		return nil, fmt.Errorf("negative message size %d", messageSize)
+	}
+
+	payload := make([]byte, messageSize)
+	if _, err := io.ReadFull(conn, payload); err != nil {
+		return nil, err
+	}
+
+	return protocol.ParseRequest(messageSize, payload)
+}
+
+func sendCorrelationResponse(conn net.Conn, correlationID int32) error {
 	var payload [8]byte
 	// message_size placeholder (0) — set correctly in later stages.
 	binary.BigEndian.PutUint32(payload[0:4], 0)
-	// correlation_id must echo the request's ID; stage requirement is constant 7.
-	binary.BigEndian.PutUint32(payload[4:8], correlationID)
+	binary.BigEndian.PutUint32(payload[4:8], uint32(correlationID))
 
 	_, err := conn.Write(payload[:])
 	return err

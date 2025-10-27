@@ -31,6 +31,7 @@
 ## Coding Style & Naming Conventions
 - Follow `goimports` formatting; never hand-edit import blocks.
 - Stick to Go naming: exported identifiers use CamelCase, unexported use lowerCamelCase.
+- Prefer Go 1.22+ range-over-int syntax for counters (e.g., `for i := range n`) to satisfy `modernize(rangeint)`.
 - Group broker logic by concern (e.g., `internal/network`, `internal/protocol`); expose only necessary types from `pkg/` if consumers need them.
 - Keep log messages structured: lower-case verbs, no trailing punctuation.
 
