@@ -55,9 +55,18 @@ func handleConnection(conn net.Conn) {
 
 		log.Printf("received request api_key=%d api_version=%d correlation_id=%d", req.Header.APIKey, req.Header.APIVersion, req.Header.CorrelationID)
 
-		if err := sendCorrelationResponse(conn, req.Header.CorrelationID); err != nil {
-			log.Printf("failed to send response to %s: %v", peer, err)
-			break
+		header := protocol.ResponseHeaderV0{CorrelationID: req.Header.CorrelationID}
+
+		switch req.Header.APIKey {
+		case protocol.APIKeyApiVersions:
+			body := buildAPIVersionsResponse(req.Header.APIVersion).Encode()
+			if err := sendResponse(conn, header, body); err != nil {
+				log.Printf("failed to send ApiVersions response to %s: %v", peer, err)
+				return
+			}
+		default:
+			log.Printf("unsupported api key %d; closing connection", req.Header.APIKey)
+			return
 		}
 	}
 }
@@ -81,12 +90,18 @@ func readRequest(conn net.Conn) (*protocol.Request, error) {
 	return protocol.ParseRequest(messageSize, payload)
 }
 
-func sendCorrelationResponse(conn net.Conn, correlationID int32) error {
-	var payload [8]byte
-	// message_size placeholder (0) — set correctly in later stages.
-	binary.BigEndian.PutUint32(payload[0:4], 0)
-	binary.BigEndian.PutUint32(payload[4:8], uint32(correlationID))
-
-	_, err := conn.Write(payload[:])
+func sendResponse(conn net.Conn, header protocol.ResponseHeaderV0, body []byte) error {
+	frame := protocol.EncodeResponse(header, body)
+	_, err := conn.Write(frame)
 	return err
+}
+
+func buildAPIVersionsResponse(requestedVersion int16) protocol.ApiVersionsResponseV4 {
+	errCode := protocol.ErrorCodeNone
+	if !protocol.ApiVersionsSupportedRange.Contains(requestedVersion) {
+		errCode = protocol.ErrorCodeUnsupportedVersion
+	}
+	return protocol.ApiVersionsResponseV4{
+		ErrorCode: errCode,
+	}
 }

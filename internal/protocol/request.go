@@ -17,7 +17,7 @@ type Request struct {
 
 // RequestHeaderV2 captures the fields for Kafka request header version 2.
 type RequestHeaderV2 struct {
-	APIKey        int16
+	APIKey        APIKey
 	APIVersion    int16
 	CorrelationID int32
 	ClientID      string
@@ -82,7 +82,7 @@ func parseRequestHeaderV2(r *bytes.Reader) (RequestHeaderV2, error) {
 	}
 
 	return RequestHeaderV2{
-		APIKey:        apiKey,
+		APIKey:        APIKey(apiKey),
 		APIVersion:    apiVersion,
 		CorrelationID: correlationID,
 		ClientID:      clientID,
