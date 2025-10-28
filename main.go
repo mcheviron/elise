@@ -12,18 +12,18 @@ import (
 )
 
 const (
-	// kafkaPort is the default port used by Kafka brokers.
-	kafkaPort = ":9092"
+	// port is the default port used by Kafka brokers.
+	port = ":9092"
 )
 
 func main() {
-	listener, err := net.Listen("tcp", kafkaPort)
+	listener, err := net.Listen("tcp", port)
 	if err != nil {
-		log.Fatalf("failed to bind to %s: %v", kafkaPort, err)
+		log.Fatalf("failed to bind to %s: %v", port, err)
 	}
 	defer listener.Close()
 
-	log.Printf("Kafka-like broker listening on %s", kafkaPort)
+	log.Printf("Broker listening on %s", port)
 
 	for {
 		conn, err := listener.Accept()
@@ -59,7 +59,7 @@ func handleConnection(conn net.Conn) {
 
 		switch req.Header.APIKey {
 		case protocol.APIKeyApiVersions:
-			body := buildAPIVersionsResponse(req.Header.APIVersion).Encode()
+			body := buildApiVersionsResponse(req.Header.APIVersion).Encode()
 			if err := sendResponse(conn, header, body); err != nil {
 				log.Printf("failed to send ApiVersions response to %s: %v", peer, err)
 				return
@@ -96,12 +96,18 @@ func sendResponse(conn net.Conn, header protocol.ResponseHeaderV0, body []byte) 
 	return err
 }
 
-func buildAPIVersionsResponse(requestedVersion int16) protocol.ApiVersionsResponseV4 {
+func buildApiVersionsResponse(requestedVersion int16) protocol.ApiVersionsResponseV4 {
 	errCode := protocol.ErrorCodeNone
 	if !protocol.ApiVersionsSupportedRange.Contains(requestedVersion) {
 		errCode = protocol.ErrorCodeUnsupportedVersion
 	}
-	return protocol.ApiVersionsResponseV4{
-		ErrorCode: errCode,
+	resp := protocol.ApiVersionsResponseV4{
+		ErrorCode:      errCode,
+		ThrottleTimeMS: 0,
 	}
+	if errCode == protocol.ErrorCodeNone {
+		resp.APIVersions = make([]protocol.APIVersionRange, len(protocol.SupportedAPIs))
+		copy(resp.APIVersions, protocol.SupportedAPIs)
+	}
+	return resp
 }

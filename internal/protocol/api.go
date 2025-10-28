@@ -14,10 +14,26 @@ type SupportedRange struct {
 	Max int16
 }
 
+// APIVersionRange captures the version span associated with a specific API key.
+type APIVersionRange struct {
+	APIKey     APIKey
+	MinVersion int16
+	MaxVersion int16
+}
+
 // ApiVersionsSupportedRange defines this broker's supported ApiVersions range.
 var ApiVersionsSupportedRange = SupportedRange{
 	Min: 0,
 	Max: 4,
+}
+
+// SupportedAPIs enumerates the APIs exposed by this broker.
+var SupportedAPIs = []APIVersionRange{
+	{
+		APIKey:     APIKeyApiVersions,
+		MinVersion: ApiVersionsSupportedRange.Min,
+		MaxVersion: ApiVersionsSupportedRange.Max,
+	},
 }
 
 // Contains reports whether v lies within the supported range.
