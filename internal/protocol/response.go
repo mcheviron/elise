@@ -1,8 +1,10 @@
+// Package protocol contains Kafka wire-format request/response helpers.
 package protocol
 
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 )
 
 // ResponseHeaderV0 encodes the response header version 0.
@@ -11,7 +13,7 @@ type ResponseHeaderV0 struct {
 }
 
 // ApiVersionsResponseV4 represents the body of an ApiVersions v4 response.
-type ApiVersionsResponseV4 struct {
+type APIVersionsResponseV4 struct {
 	ErrorCode      ErrorCode
 	APIVersions    []APIVersionRange
 	ThrottleTimeMS int32
@@ -19,8 +21,31 @@ type ApiVersionsResponseV4 struct {
 	APIVersionTags map[APIKey][]TaggedField
 }
 
+// DescribeTopicPartitionsResponse represents the body of a DescribeTopicPartitions v0 response.
+type DescribeTopicPartitionsResponse struct {
+	ThrottleTimeMS int32
+	Topics         []DescribeTopicPartitionsResponseTopic
+	NextCursor     *DescribeTopicPartitionsCursor
+	TaggedFields   []TaggedField
+}
+
+// DescribeTopicPartitionsResponseTopic models topic-level information in the response.
+type DescribeTopicPartitionsResponseTopic struct {
+	ErrorCode                 ErrorCode
+	Name                      *string
+	TopicID                   [16]byte
+	IsInternal                bool
+	Partitions                []DescribeTopicPartitionsResponsePartition
+	NextCursor                *DescribeTopicPartitionsCursor
+	TopicAuthorizedOperations int32
+	TaggedFields              []TaggedField
+}
+
+// DescribeTopicPartitionsResponsePartition models partition-level information. Currently unused.
+type DescribeTopicPartitionsResponsePartition struct{}
+
 // Encode serializes the ApiVersions v4 response body.
-func (r ApiVersionsResponseV4) Encode() []byte {
+func (r APIVersionsResponseV4) Encode() []byte {
 	buf := bytes.NewBuffer(make([]byte, 0, 16))
 
 	writeInt16(buf, int16(r.ErrorCode))
@@ -39,6 +64,28 @@ func (r ApiVersionsResponseV4) Encode() []byte {
 	return buf.Bytes()
 }
 
+// Encode serializes the DescribeTopicPartitions response body.
+func (r DescribeTopicPartitionsResponse) Encode() ([]byte, error) {
+	buf := bytes.NewBuffer(make([]byte, 0, 64))
+
+	writeInt32(buf, r.ThrottleTimeMS)
+
+	writeCompactArrayLen(buf, len(r.Topics))
+	for i, topic := range r.Topics {
+		if err := encodeDescribeTopicPartitionsTopic(buf, topic); err != nil {
+			return nil, wrapIndexError("topic", i, err)
+		}
+	}
+
+	if err := writeCompactNullableCursor(buf, r.NextCursor); err != nil {
+		return nil, err
+	}
+
+	writeTaggedFields(buf, r.TaggedFields)
+
+	return buf.Bytes(), nil
+}
+
 // EncodeResponse constructs the byte representation of a response that uses
 // header v0 followed by the provided body payload.
 func EncodeResponse(header ResponseHeaderV0, body []byte) []byte {
@@ -51,38 +98,50 @@ func EncodeResponse(header ResponseHeaderV0, body []byte) []byte {
 	return frame
 }
 
-func writeInt16(buf *bytes.Buffer, v int16) {
-	var tmp [2]byte
-	binary.BigEndian.PutUint16(tmp[:], uint16(v))
-	buf.Write(tmp[:])
+func encodeDescribeTopicPartitionsTopic(buf *bytes.Buffer, topic DescribeTopicPartitionsResponseTopic) error {
+	writeInt16(buf, int16(topic.ErrorCode))
+	writeCompactNullableString(buf, topic.Name)
+	writeUUID(buf, topic.TopicID)
+	writeBool(buf, topic.IsInternal)
+
+	if err := encodeDescribeTopicPartitionsPartitions(buf, topic.Partitions); err != nil {
+		return err
+	}
+
+	if err := writeCompactNullableCursor(buf, topic.NextCursor); err != nil {
+		return err
+	}
+
+	writeInt32(buf, topic.TopicAuthorizedOperations)
+	writeTaggedFields(buf, topic.TaggedFields)
+	return nil
 }
 
-func writeInt32(buf *bytes.Buffer, v int32) {
-	var tmp [4]byte
-	binary.BigEndian.PutUint32(tmp[:], uint32(v))
-	buf.Write(tmp[:])
+func encodeDescribeTopicPartitionsPartitions(buf *bytes.Buffer, partitions []DescribeTopicPartitionsResponsePartition) error {
+	if len(partitions) != 0 {
+		return fmt.Errorf("protocol: non-empty partitions not supported yet")
+	}
+	writeCompactArrayLen(buf, 0)
+	return nil
 }
 
-func writeCompactArrayLen(buf *bytes.Buffer, length int) {
-	writeUVarInt(buf, uint64(length+1))
-}
-
-func writeTaggedFields(buf *bytes.Buffer, fields []TaggedField) {
-	if len(fields) == 0 {
+func writeCompactNullableCursor(buf *bytes.Buffer, cursor *DescribeTopicPartitionsCursor) error {
+	if cursor == nil {
 		writeUVarInt(buf, 0)
-		return
+		return nil
 	}
 
-	writeUVarInt(buf, uint64(len(fields)+1))
-	for _, field := range fields {
-		writeUVarInt(buf, uint64(field.Tag))
-		writeUVarInt(buf, uint64(len(field.Value)+1))
-		buf.Write(field.Value)
-	}
+	inner := bytes.NewBuffer(make([]byte, 0, 32))
+	writeCompactString(inner, cursor.TopicName)
+	writeInt32(inner, cursor.PartitionIndex)
+	writeTaggedFields(inner, cursor.TaggedFields)
+
+	payload := inner.Bytes()
+	writeUVarInt(buf, uint64(len(payload)+1))
+	buf.Write(payload)
+	return nil
 }
 
-func writeUVarInt(buf *bytes.Buffer, v uint64) {
-	var tmp [binary.MaxVarintLen64]byte
-	n := binary.PutUvarint(tmp[:], v)
-	buf.Write(tmp[:n])
+func wrapIndexError(kind string, index int, err error) error {
+	return fmt.Errorf("protocol: encoding %s[%d]: %w", kind, index, err)
 }

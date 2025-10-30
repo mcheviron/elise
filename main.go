@@ -58,10 +58,25 @@ func handleConnection(conn net.Conn) {
 		header := protocol.ResponseHeaderV0{CorrelationID: req.Header.CorrelationID}
 
 		switch req.Header.APIKey {
-		case protocol.APIKeyApiVersions:
-			body := buildApiVersionsResponse(req.Header.APIVersion).Encode()
+		case protocol.APIKeyAPIVersions:
+			body := buildAPIVersionsResponse(req.Header.APIVersion).Encode()
 			if err := sendResponse(conn, header, body); err != nil {
 				log.Printf("failed to send ApiVersions response to %s: %v", peer, err)
+				return
+			}
+		case protocol.APIKeyDescribeTopicPartitions:
+			descReq, err := protocol.ParseDescribeTopicPartitionsRequest(req.Body)
+			if err != nil {
+				log.Printf("failed to parse DescribeTopicPartitions request: %v", err)
+				return
+			}
+			respBody, err := buildDescribeTopicPartitionsResponse(descReq).Encode()
+			if err != nil {
+				log.Printf("failed to encode DescribeTopicPartitions response: %v", err)
+				return
+			}
+			if err := sendResponse(conn, header, respBody); err != nil {
+				log.Printf("failed to send DescribeTopicPartitions response to %s: %v", peer, err)
 				return
 			}
 		default:
@@ -96,12 +111,12 @@ func sendResponse(conn net.Conn, header protocol.ResponseHeaderV0, body []byte) 
 	return err
 }
 
-func buildApiVersionsResponse(requestedVersion int16) protocol.ApiVersionsResponseV4 {
+func buildAPIVersionsResponse(requestedVersion int16) protocol.APIVersionsResponseV4 {
 	errCode := protocol.ErrorCodeNone
-	if !protocol.ApiVersionsSupportedRange.Contains(requestedVersion) {
+	if !protocol.APIVersionsSupportedRange.Contains(requestedVersion) {
 		errCode = protocol.ErrorCodeUnsupportedVersion
 	}
-	resp := protocol.ApiVersionsResponseV4{
+	resp := protocol.APIVersionsResponseV4{
 		ErrorCode:      errCode,
 		ThrottleTimeMS: 0,
 	}
@@ -110,4 +125,28 @@ func buildApiVersionsResponse(requestedVersion int16) protocol.ApiVersionsRespon
 		copy(resp.APIVersions, protocol.SupportedAPIs)
 	}
 	return resp
+}
+
+func buildDescribeTopicPartitionsResponse(req *protocol.DescribeTopicPartitionsRequest) protocol.DescribeTopicPartitionsResponse {
+	topics := make([]protocol.DescribeTopicPartitionsResponseTopic, 0, len(req.Topics))
+	for _, topic := range req.Topics {
+		name := topic.Name // capture per-iteration reference
+		topics = append(topics, protocol.DescribeTopicPartitionsResponseTopic{
+			ErrorCode:                 protocol.ErrorCodeUnknownTopicOrPartition,
+			Name:                      &name,
+			TopicID:                   [16]byte{},
+			IsInternal:                false,
+			Partitions:                nil,
+			NextCursor:                nil,
+			TopicAuthorizedOperations: -1,
+			TaggedFields:              nil,
+		})
+	}
+
+	return protocol.DescribeTopicPartitionsResponse{
+		ThrottleTimeMS: 0,
+		Topics:         topics,
+		NextCursor:     nil,
+		TaggedFields:   nil,
+	}
 }

@@ -1,11 +1,14 @@
+// Package protocol contains Kafka wire-format request/response encoders and decoders.
 package protocol
 
 // APIKey identifies a Kafka admin/data plane API.
 type APIKey int16
 
 const (
-	// APIKeyApiVersions corresponds to the ApiVersions RPC.
-	APIKeyApiVersions APIKey = 18
+	// APIKeyAPIVersions corresponds to the ApiVersions RPC.
+	APIKeyAPIVersions APIKey = 18
+	// APIKeyDescribeTopicPartitions corresponds to DescribeTopicPartitions RPC.
+	APIKeyDescribeTopicPartitions APIKey = 75
 )
 
 // SupportedRange captures the inclusive version span supported for an API.
@@ -21,8 +24,8 @@ type APIVersionRange struct {
 	MaxVersion int16
 }
 
-// ApiVersionsSupportedRange defines this broker's supported ApiVersions range.
-var ApiVersionsSupportedRange = SupportedRange{
+// APIVersionsSupportedRange defines this broker's supported API Versions range.
+var APIVersionsSupportedRange = SupportedRange{
 	Min: 0,
 	Max: 4,
 }
@@ -30,15 +33,30 @@ var ApiVersionsSupportedRange = SupportedRange{
 // SupportedAPIs enumerates the APIs exposed by this broker.
 var SupportedAPIs = []APIVersionRange{
 	{
-		APIKey:     APIKeyApiVersions,
-		MinVersion: ApiVersionsSupportedRange.Min,
-		MaxVersion: ApiVersionsSupportedRange.Max,
+		APIKey:     APIKeyAPIVersions,
+		MinVersion: APIVersionsSupportedRange.Min,
+		MaxVersion: APIVersionsSupportedRange.Max,
+	},
+	{
+		APIKey:     APIKeyDescribeTopicPartitions,
+		MinVersion: 0,
+		MaxVersion: 0,
 	},
 }
 
 // Contains reports whether v lies within the supported range.
 func (r SupportedRange) Contains(v int16) bool {
 	return v >= r.Min && v <= r.Max
+}
+
+// IsFlexibleRequest reports whether the given API key/version pair uses the flexible request header.
+func IsFlexibleRequest(key APIKey, version int16) bool {
+	switch key {
+	case APIKeyDescribeTopicPartitions:
+		return true
+	default:
+		return false
+	}
 }
 
 // ErrorCode models Kafka error codes returned in responses.
@@ -49,4 +67,6 @@ const (
 	ErrorCodeNone ErrorCode = 0
 	// ErrorCodeUnsupportedVersion indicates the request used an unsupported API version.
 	ErrorCodeUnsupportedVersion ErrorCode = 35
+	// ErrorCodeUnknownTopicOrPartition indicates the requested topic or partition does not exist.
+	ErrorCodeUnknownTopicOrPartition ErrorCode = 3
 )

@@ -1,8 +1,8 @@
+// Package protocol contains Kafka wire-format request/response helpers.
 package protocol
 
 import (
 	"bytes"
-	"encoding/binary"
 	"fmt"
 	"io"
 )
@@ -22,6 +22,7 @@ type RequestHeaderV2 struct {
 	CorrelationID int32
 	ClientID      string
 	TaggedFields  []TaggedField
+	Flexible      bool
 }
 
 // TaggedField represents a flexible version tagged field entry.
@@ -38,7 +39,7 @@ func ParseRequest(messageSize int32, payload []byte) (*Request, error) {
 
 	reader := bytes.NewReader(payload)
 
-	header, err := parseRequestHeaderV2(reader)
+	header, err := parseRequestHeader(reader)
 	if err != nil {
 		return nil, err
 	}
@@ -55,8 +56,8 @@ func ParseRequest(messageSize int32, payload []byte) (*Request, error) {
 	}, nil
 }
 
-func parseRequestHeaderV2(r *bytes.Reader) (RequestHeaderV2, error) {
-	apiKey, err := readInt16(r)
+func parseRequestHeader(r *bytes.Reader) (RequestHeaderV2, error) {
+	rawKey, err := readInt16(r)
 	if err != nil {
 		return RequestHeaderV2{}, fmt.Errorf("protocol: reading api key: %w", err)
 	}
@@ -71,22 +72,41 @@ func parseRequestHeaderV2(r *bytes.Reader) (RequestHeaderV2, error) {
 		return RequestHeaderV2{}, fmt.Errorf("protocol: reading correlation id: %w", err)
 	}
 
-	clientID, err := readNullableString(r)
-	if err != nil {
-		return RequestHeaderV2{}, fmt.Errorf("protocol: reading client id: %w", err)
-	}
+	apiKey := APIKey(rawKey)
+	flexible := IsFlexibleRequest(apiKey, apiVersion)
 
-	taggedFields, err := readTaggedFields(r)
-	if err != nil {
-		return RequestHeaderV2{}, fmt.Errorf("protocol: reading tagged fields: %w", err)
+	var clientID string
+	var taggedFields []TaggedField
+
+	if flexible {
+		clientPtr, err := readCompactNullableString(r)
+		if err != nil {
+			return RequestHeaderV2{}, fmt.Errorf("protocol: reading client id: %w", err)
+		}
+		if clientPtr != nil {
+			clientID = *clientPtr
+		}
+
+		taggedFields, err = readTaggedFields(r)
+		if err != nil {
+			return RequestHeaderV2{}, fmt.Errorf("protocol: reading tagged fields: %w", err)
+		}
+	} else {
+		var err error
+		clientID, err = readNullableString(r)
+		if err != nil {
+			return RequestHeaderV2{}, fmt.Errorf("protocol: reading client id: %w", err)
+		}
+		taggedFields = nil
 	}
 
 	return RequestHeaderV2{
-		APIKey:        APIKey(apiKey),
+		APIKey:        apiKey,
 		APIVersion:    apiVersion,
 		CorrelationID: correlationID,
 		ClientID:      clientID,
 		TaggedFields:  taggedFields,
+		Flexible:      flexible,
 	}, nil
 }
 
@@ -129,48 +149,4 @@ func readTaggedFields(r *bytes.Reader) ([]TaggedField, error) {
 	}
 
 	return fields, nil
-}
-
-func readInt16(r *bytes.Reader) (int16, error) {
-	var buf [2]byte
-	if _, err := io.ReadFull(r, buf[:]); err != nil {
-		return 0, err
-	}
-	return int16(binary.BigEndian.Uint16(buf[:])), nil
-}
-
-func readInt32(r *bytes.Reader) (int32, error) {
-	var buf [4]byte
-	if _, err := io.ReadFull(r, buf[:]); err != nil {
-		return 0, err
-	}
-	return int32(binary.BigEndian.Uint32(buf[:])), nil
-}
-
-func readNullableString(r *bytes.Reader) (string, error) {
-	length, err := readInt16(r)
-	if err != nil {
-		return "", err
-	}
-	if length < 0 {
-		return "", nil
-	}
-	if length == 0 {
-		return "", nil
-	}
-
-	buf := make([]byte, length)
-	if _, err := io.ReadFull(r, buf); err != nil {
-		return "", err
-	}
-	str := string(buf)
-	return str, nil
-}
-
-func readUVarInt(r *bytes.Reader) (uint64, error) {
-	value, err := binary.ReadUvarint(r)
-	if err != nil {
-		return 0, err
-	}
-	return value, nil
 }
