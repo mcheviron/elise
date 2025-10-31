@@ -3,7 +3,7 @@ package broker
 import (
 	"log"
 
-    "github.com/mcheviron/elise/internal/metadata"
+	"github.com/mcheviron/elise/internal/metadata"
 )
 
 const topicAuthorizedOpsUnknown = int32(-2147483648)

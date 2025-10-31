@@ -190,14 +190,6 @@ func readDescribeTopicPartitionsCursor(r *bytes.Reader) (*DescribeTopicPartition
 	}, nil
 }
 
-func readInt16(r *bytes.Reader) (int16, error) {
-	var buf [2]byte
-	if _, err := io.ReadFull(r, buf[:]); err != nil {
-		return 0, err
-	}
-	return int16(binary.BigEndian.Uint16(buf[:])), nil
-}
-
 func readInt32(r *bytes.Reader) (int32, error) {
 	var buf [4]byte
 	if _, err := io.ReadFull(r, buf[:]); err != nil {
