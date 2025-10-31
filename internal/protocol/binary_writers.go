@@ -41,30 +41,3 @@ func writeUVarInt(buf *bytes.Buffer, v uint64) {
 	n := binary.PutUvarint(tmp[:], v)
 	buf.Write(tmp[:n])
 }
-
-func writeCompactString(buf *bytes.Buffer, value string) {
-	writeUVarInt(buf, uint64(len(value)+1))
-	if len(value) > 0 {
-		buf.WriteString(value)
-	}
-}
-
-func writeCompactNullableString(buf *bytes.Buffer, value *string) {
-	if value == nil {
-		writeUVarInt(buf, 0)
-		return
-	}
-	writeCompactString(buf, *value)
-}
-
-func writeUUID(buf *bytes.Buffer, id [16]byte) {
-	buf.Write(id[:])
-}
-
-func writeBool(buf *bytes.Buffer, v bool) {
-	if v {
-		buf.WriteByte(1)
-	} else {
-		buf.WriteByte(0)
-	}
-}

@@ -3,7 +3,7 @@ package main
 import (
 	"log"
 
-    "github.com/mcheviron/elise/internal/broker"
+	"github.com/mcheviron/elise/internal/broker"
 )
 
 func main() {

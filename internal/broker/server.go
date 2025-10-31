@@ -8,8 +8,8 @@ import (
 	"log"
 	"net"
 
-    "github.com/mcheviron/elise/internal/metadata"
-    "github.com/mcheviron/elise/internal/protocol"
+	"github.com/mcheviron/elise/internal/metadata"
+	"github.com/mcheviron/elise/internal/protocol"
 )
 
 const defaultPort = ":9092"
