@@ -20,6 +20,7 @@
 
 - Favor end-to-end validation via the CLI utilities under `cmd/` (e.g., DescribeTopicPartitions testers) or simple shell probes (`xxd`, `nc`, etc.).
 - Add unit tests alongside code (`*_test.go`) when logic is complex.
+- For protocol smoke tests that need a live broker (ApiVersions, Fetch, future handlers), run `just run` in a second terminal or background the command locally (for example `just run >/tmp/elise_server.log 2>&1 &`) and record the PID so you can stop it later. After the log line `Broker listening on :9092` appears, exercise the feature from another shell using whatever helper makes sense (Python script, `nc`, CLI under `cmd/`). Capture the exact command and expected output in your notes or plan so future contributors understand how to validate the behavior. Always terminate the background `just run` process when you are done testing.
 
 ## ExecPlans
 

@@ -134,6 +134,8 @@ Describe how to start or exercise the system and what to observe. Phrase accepta
 
 Spell out the three layers of evidence whenever you introduce new behavior: call out the Go unit tests you added by file name, note that `just check` must pass, and document an end-to-end scenario that hits the running broker using either a purpose-built CLI in `cmd/`, a short external script, or direct TCP probes. When seeding log segments or metadata is necessary, record the seeding command and the resulting files so the next contributor can recreate the setup.
 
+When the acceptance proof requires hitting the broker over the network, spell out how to keep it running while you test. Encourage the reader to launch `just run` in a second terminal or background it temporarily (e.g. `just run >/tmp/elise_server.log 2>&1 &`), capture the PID, and stop it with `kill` once finished. After the log line `Broker listening on :9092` appears, describe the probe they should run (Python helper, `nc`, CLI under `cmd/`, etc.) and detail what successful output looks like. Always include an explicit reminder to tear down the temporary server once verification completes.
+
 ## Idempotence and Recovery
 
 If steps can be repeated safely, say so. If a step is risky, provide a safe retry or rollback path. Keep the environment clean after completion.
