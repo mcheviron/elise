@@ -13,10 +13,14 @@
 
 ## Coding Style
 
-- Rely on `goimports` formatting and Go naming conventions.
+- Rely on `just fmt` formatting and run it after making code changes.
 - Keep log messages lowercase and concise.
 
 ## Testing
 
 - Favor end-to-end validation via the CLI utilities under `cmd/` (e.g., DescribeTopicPartitions testers) or simple shell probes (`xxd`, `nc`, etc.).
 - Add unit tests alongside code (`*_test.go`) when logic is complex.
+
+## ExecPlans
+
+When writing complex features or significant refactors, use an ExecPlan (as described in .agent/PLANS.md) from design to implementation.
