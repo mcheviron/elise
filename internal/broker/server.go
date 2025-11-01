@@ -118,7 +118,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 				return
 			}
 		case protocol.APIKeyFetch:
-			fetchResp, err := buildFetchResponse(req.Header.APIVersion, req.Body)
+			fetchResp, err := s.buildFetchResponse(req.Header.APIVersion, req.Body)
 			if err != nil {
 				log.Printf("failed to build Fetch response: %v", err)
 				return
@@ -176,7 +176,7 @@ func buildAPIVersionsResponse(requestedVersion int16) protocol.APIVersionsRespon
 	return resp
 }
 
-func buildFetchResponse(requestedVersion int16, payload []byte) (protocol.FetchResponseV16, error) {
+func (s *Server) buildFetchResponse(requestedVersion int16, payload []byte) (protocol.FetchResponseV16, error) {
 	resp := protocol.FetchResponseV16{
 		ThrottleTimeMS: 0,
 		SessionID:      0,
@@ -193,23 +193,54 @@ func buildFetchResponse(requestedVersion int16, payload []byte) (protocol.FetchR
 
 	resp.ErrorCode = protocol.ErrorCodeNone
 	resp.Responses = make([]protocol.FetchableTopicResponse, 0, len(req.Topics))
+	cluster := s.metaManager.Cluster()
 	for _, topic := range req.Topics {
-		partitions := make([]protocol.FetchablePartitionResponse, 0, len(topic.Partitions))
+		var (
+			metaTopic  *metadata.Topic
+			topicFound bool
+		)
+		if cluster != nil {
+			metaTopic, topicFound = cluster.TopicByID(topic.TopicID)
+		}
+
+		topicResp := protocol.FetchableTopicResponse{
+			TopicID:    topic.TopicID,
+			Partitions: make([]protocol.FetchablePartitionResponse, 0, len(topic.Partitions)),
+		}
+
 		for _, partition := range topic.Partitions {
-			partitions = append(partitions, protocol.FetchablePartitionResponse{
+			partitionResp := protocol.FetchablePartitionResponse{
 				PartitionIndex:       partition.PartitionIndex,
 				ErrorCode:            protocol.ErrorCodeUnknownTopicID,
 				HighWatermark:        -1,
 				LastStableOffset:     -1,
 				LogStartOffset:       -1,
+				AbortedTransactions:  []protocol.FetchResponseAbortedTransaction{},
 				PreferredReadReplica: -1,
-			})
+				Records:              nil,
+			}
+
+			if !topicFound || metaTopic == nil {
+				topicResp.Partitions = append(topicResp.Partitions, partitionResp)
+				continue
+			}
+
+			if _, ok := metaTopic.Partitions[partition.PartitionIndex]; !ok {
+				partitionResp.ErrorCode = protocol.ErrorCodeUnknownTopicOrPartition
+				topicResp.Partitions = append(topicResp.Partitions, partitionResp)
+				continue
+			}
+
+			partitionResp.ErrorCode = protocol.ErrorCodeNone
+			partitionResp.HighWatermark = 0
+			partitionResp.LastStableOffset = 0
+			partitionResp.LogStartOffset = 0
+			partitionResp.Records = make([]byte, 0)
+
+			topicResp.Partitions = append(topicResp.Partitions, partitionResp)
 		}
 
-		resp.Responses = append(resp.Responses, protocol.FetchableTopicResponse{
-			TopicID:    topic.TopicID,
-			Partitions: partitions,
-		})
+		resp.Responses = append(resp.Responses, topicResp)
 	}
 
 	return resp, nil
