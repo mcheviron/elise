@@ -103,7 +103,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 				return
 			}
 		case protocol.APIKeyDescribeTopicPartitions:
-			descReq, err := ParseDescribeTopicPartitionsRequest(req.Body)
+			descReq, err := protocol.ParseDescribeTopicPartitionsRequest(req.Body)
 			if err != nil {
 				log.Printf("failed to parse DescribeTopicPartitions request: %v", err)
 				return
@@ -118,7 +118,12 @@ func (s *Server) handleConnection(conn net.Conn) {
 				return
 			}
 		case protocol.APIKeyFetch:
-			body := buildFetchResponse(req.Header.APIVersion).Encode()
+			fetchResp, err := buildFetchResponse(req.Header.APIVersion, req.Body)
+			if err != nil {
+				log.Printf("failed to build Fetch response: %v", err)
+				return
+			}
+			body := fetchResp.Encode()
 			if err := sendResponse(conn, header, body); err != nil {
 				log.Printf("failed to send Fetch response to %s: %v", peer, err)
 				return
@@ -171,16 +176,41 @@ func buildAPIVersionsResponse(requestedVersion int16) protocol.APIVersionsRespon
 	return resp
 }
 
-func buildFetchResponse(requestedVersion int16) protocol.FetchResponseV16 {
+func buildFetchResponse(requestedVersion int16, payload []byte) (protocol.FetchResponseV16, error) {
 	resp := protocol.FetchResponseV16{
 		ThrottleTimeMS: 0,
 		SessionID:      0,
 	}
 	if requestedVersion != 16 {
 		resp.ErrorCode = protocol.ErrorCodeUnsupportedVersion
-		return resp
+		return resp, nil
+	}
+
+	req, err := protocol.ParseFetchRequestV16(payload)
+	if err != nil {
+		return protocol.FetchResponseV16{}, err
 	}
 
 	resp.ErrorCode = protocol.ErrorCodeNone
-	return resp
+	resp.Responses = make([]protocol.FetchableTopicResponse, 0, len(req.Topics))
+	for _, topic := range req.Topics {
+		partitions := make([]protocol.FetchablePartitionResponse, 0, len(topic.Partitions))
+		for _, partition := range topic.Partitions {
+			partitions = append(partitions, protocol.FetchablePartitionResponse{
+				PartitionIndex:       partition.PartitionIndex,
+				ErrorCode:            protocol.ErrorCodeUnknownTopicID,
+				HighWatermark:        -1,
+				LastStableOffset:     -1,
+				LogStartOffset:       -1,
+				PreferredReadReplica: -1,
+			})
+		}
+
+		resp.Responses = append(resp.Responses, protocol.FetchableTopicResponse{
+			TopicID:    topic.TopicID,
+			Partitions: partitions,
+		})
+	}
+
+	return resp, nil
 }

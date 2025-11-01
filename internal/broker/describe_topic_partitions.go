@@ -6,17 +6,18 @@ import (
 	"sort"
 
 	"github.com/mcheviron/elise/internal/metadata"
+	"github.com/mcheviron/elise/internal/protocol"
 )
 
 const topicAuthorizedOpsUnknown = int32(-2147483648)
 
-func (s *Server) buildDescribeTopicPartitionsResponse(req *DescribeTopicPartitionsRequest) DescribeTopicPartitionsResponse {
+func (s *Server) buildDescribeTopicPartitionsResponse(req *protocol.DescribeTopicPartitionsRequest) protocol.DescribeTopicPartitionsResponse {
 	cluster := s.metaManager.Cluster()
 	if cluster == nil {
 		log.Printf("metadata manager returned nil cluster")
 	}
 
-	topics := make([]DescribeTopicPartitionsResponseTopic, 0, len(req.Topics))
+	topics := make([]protocol.DescribeTopicPartitionsResponseTopic, 0, len(req.Topics))
 	for _, topic := range req.Topics {
 		topics = append(topics, buildTopicResponse(cluster, topic))
 	}
@@ -38,7 +39,7 @@ func (s *Server) buildDescribeTopicPartitionsResponse(req *DescribeTopicPartitio
 		})
 	}
 
-	return DescribeTopicPartitionsResponse{
+	return protocol.DescribeTopicPartitionsResponse{
 		ThrottleTimeMS: 0,
 		Topics:         topics,
 		NextCursor:     nil,
@@ -46,9 +47,9 @@ func (s *Server) buildDescribeTopicPartitionsResponse(req *DescribeTopicPartitio
 	}
 }
 
-func buildTopicResponse(cluster *metadata.Cluster, topicReq DescribeTopicPartitionsRequestTopic) DescribeTopicPartitionsResponseTopic {
-	response := DescribeTopicPartitionsResponseTopic{
-		ErrorCode:                 ErrorCodeUnknownTopicOrPartition,
+func buildTopicResponse(cluster *metadata.Cluster, topicReq protocol.DescribeTopicPartitionsRequestTopic) protocol.DescribeTopicPartitionsResponseTopic {
+	response := protocol.DescribeTopicPartitionsResponseTopic{
+		ErrorCode:                 protocol.ErrorCodeUnknownTopicOrPartition,
 		Name:                      nil,
 		TopicID:                   [16]byte{},
 		IsInternal:                false,
@@ -92,35 +93,35 @@ func buildTopicResponse(cluster *metadata.Cluster, topicReq DescribeTopicPartiti
 	}
 	response.Name = &name
 	response.TopicID = metaTopic.ID
-	response.ErrorCode = ErrorCodeNone
+	response.ErrorCode = protocol.ErrorCodeNone
 	response.Partitions = buildPartitionResponses(topicReq, metaTopic)
 
 	return response
 }
 
-func buildPartitionResponses(topicReq DescribeTopicPartitionsRequestTopic, metaTopic *metadata.Topic) []DescribeTopicPartitionsResponsePartition {
+func buildPartitionResponses(topicReq protocol.DescribeTopicPartitionsRequestTopic, metaTopic *metadata.Topic) []protocol.DescribeTopicPartitionsResponsePartition {
 	if metaTopic == nil {
 		return nil
 	}
 
 	if len(topicReq.Partitions) == 0 {
 		metaPartitions := metaTopic.PartitionList()
-		partitions := make([]DescribeTopicPartitionsResponsePartition, 0, len(metaPartitions))
+		partitions := make([]protocol.DescribeTopicPartitionsResponsePartition, 0, len(metaPartitions))
 		for _, p := range metaPartitions {
 			partitions = append(partitions, buildPartitionResponse(p))
 		}
 		return partitions
 	}
 
-	partitions := make([]DescribeTopicPartitionsResponsePartition, 0, len(topicReq.Partitions))
+	partitions := make([]protocol.DescribeTopicPartitionsResponsePartition, 0, len(topicReq.Partitions))
 	for _, requested := range topicReq.Partitions {
 		if part, ok := metaTopic.Partitions[requested.PartitionIndex]; ok && part != nil {
 			partitions = append(partitions, buildPartitionResponse(part))
 			continue
 		}
 
-		partitions = append(partitions, DescribeTopicPartitionsResponsePartition{
-			ErrorCode:              ErrorCodeUnknownTopicOrPartition,
+		partitions = append(partitions, protocol.DescribeTopicPartitionsResponsePartition{
+			ErrorCode:              protocol.ErrorCodeUnknownTopicOrPartition,
 			PartitionIndex:         requested.PartitionIndex,
 			LeaderID:               -1,
 			LeaderEpoch:            -1,
@@ -136,9 +137,9 @@ func buildPartitionResponses(topicReq DescribeTopicPartitionsRequestTopic, metaT
 	return partitions
 }
 
-func buildPartitionResponse(metadataPartition *metadata.Partition) DescribeTopicPartitionsResponsePartition {
-	return DescribeTopicPartitionsResponsePartition{
-		ErrorCode:              ErrorCodeNone,
+func buildPartitionResponse(metadataPartition *metadata.Partition) protocol.DescribeTopicPartitionsResponsePartition {
+	return protocol.DescribeTopicPartitionsResponsePartition{
+		ErrorCode:              protocol.ErrorCodeNone,
 		PartitionIndex:         metadataPartition.PartitionID,
 		LeaderID:               metadataPartition.LeaderID,
 		LeaderEpoch:            metadataPartition.LeaderEpoch,

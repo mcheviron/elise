@@ -1,8 +1,7 @@
-package broker
+package protocol
 
 import (
 	"bytes"
-	"encoding/binary"
 	"fmt"
 	"io"
 )
@@ -34,12 +33,6 @@ type DescribeTopicPartitionsCursor struct {
 	TopicName      string
 	PartitionIndex int32
 	TaggedFields   []TaggedField
-}
-
-// TaggedField represents a flexible version tagged field entry.
-type TaggedField struct {
-	Tag   uint32
-	Value []byte
 }
 
 // ParseDescribeTopicPartitionsRequest parses the request body into the strongly typed representation.
@@ -188,94 +181,4 @@ func readDescribeTopicPartitionsCursor(r *bytes.Reader) (*DescribeTopicPartition
 		PartitionIndex: partitionIndex,
 		TaggedFields:   tagged,
 	}, nil
-}
-
-func readInt32(r *bytes.Reader) (int32, error) {
-	var buf [4]byte
-	if _, err := io.ReadFull(r, buf[:]); err != nil {
-		return 0, err
-	}
-	return int32(binary.BigEndian.Uint32(buf[:])), nil
-}
-
-func readUVarInt(r *bytes.Reader) (uint64, error) {
-	value, err := binary.ReadUvarint(r)
-	if err != nil {
-		return 0, err
-	}
-	return value, nil
-}
-
-func readUUID(r *bytes.Reader) ([16]byte, error) {
-	var id [16]byte
-	if _, err := io.ReadFull(r, id[:]); err != nil {
-		return [16]byte{}, err
-	}
-	return id, nil
-}
-
-func readCompactString(r *bytes.Reader) (string, error) {
-	lengthPlusOne, err := readUVarInt(r)
-	if err != nil {
-		return "", err
-	}
-	if lengthPlusOne == 0 {
-		return "", fmt.Errorf("protocol: compact string length zero denotes null")
-	}
-	length := int(lengthPlusOne - 1)
-	buf := make([]byte, length)
-	if _, err := io.ReadFull(r, buf); err != nil {
-		return "", err
-	}
-	return string(buf), nil
-}
-
-func readCompactNullableString(r *bytes.Reader) (*string, error) {
-	lengthPlusOne, err := readUVarInt(r)
-	if err != nil {
-		return nil, err
-	}
-	if lengthPlusOne == 0 {
-		return nil, nil
-	}
-	length := int(lengthPlusOne - 1)
-	buf := make([]byte, length)
-	if _, err := io.ReadFull(r, buf); err != nil {
-		return nil, err
-	}
-	str := string(buf)
-	return &str, nil
-}
-
-func readTaggedFields(r *bytes.Reader) ([]TaggedField, error) {
-	countPlusOne, err := readUVarInt(r)
-	if err != nil {
-		return nil, err
-	}
-	if countPlusOne == 0 {
-		return nil, nil
-	}
-	count := int(countPlusOne - 1)
-
-	fields := make([]TaggedField, 0, count)
-	for i := range count {
-		tag, err := readUVarInt(r)
-		if err != nil {
-			return nil, fmt.Errorf("protocol: reading tagged field[%d] tag: %w", i, err)
-		}
-		sizePlusOne, err := readUVarInt(r)
-		if err != nil {
-			return nil, fmt.Errorf("protocol: reading tagged field[%d] size: %w", i, err)
-		}
-		if sizePlusOne == 0 {
-			return nil, fmt.Errorf("protocol: tagged field[%d] had zero length", i)
-		}
-		size := int(sizePlusOne - 1)
-		buf := make([]byte, size)
-		if _, err := io.ReadFull(r, buf); err != nil {
-			return nil, fmt.Errorf("protocol: reading tagged field[%d] value: %w", i, err)
-		}
-		fields = append(fields, TaggedField{Tag: uint32(tag), Value: buf})
-	}
-	return fields, nil
 }

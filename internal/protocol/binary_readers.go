@@ -4,8 +4,17 @@ package protocol
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"io"
 )
+
+func readInt8(r *bytes.Reader) (int8, error) {
+	b, err := r.ReadByte()
+	if err != nil {
+		return 0, err
+	}
+	return int8(b), nil
+}
 
 func readInt16(r *bytes.Reader) (int16, error) {
 	var buf [2]byte
@@ -21,6 +30,14 @@ func readInt32(r *bytes.Reader) (int32, error) {
 		return 0, err
 	}
 	return int32(binary.BigEndian.Uint32(buf[:])), nil
+}
+
+func readInt64(r *bytes.Reader) (int64, error) {
+	var buf [8]byte
+	if _, err := io.ReadFull(r, buf[:]); err != nil {
+		return 0, err
+	}
+	return int64(binary.BigEndian.Uint64(buf[:])), nil
 }
 
 func readNullableString(r *bytes.Reader) (string, error) {
@@ -59,10 +76,45 @@ func readCompactNullableString(r *bytes.Reader) (*string, error) {
 	return &str, nil
 }
 
+func readCompactString(r *bytes.Reader) (string, error) {
+	lengthPlusOne, err := readUVarInt(r)
+	if err != nil {
+		return "", err
+	}
+	if lengthPlusOne == 0 {
+		return "", fmt.Errorf("protocol: compact string length zero denotes null")
+	}
+	length := int(lengthPlusOne - 1)
+	buf := make([]byte, length)
+	if _, err := io.ReadFull(r, buf); err != nil {
+		return "", err
+	}
+	return string(buf), nil
+}
+
+func readCompactArrayLen(r *bytes.Reader) (int, error) {
+	countPlusOne, err := readUVarInt(r)
+	if err != nil {
+		return 0, err
+	}
+	if countPlusOne == 0 {
+		return 0, fmt.Errorf("protocol: compact array length zero denotes null")
+	}
+	return int(countPlusOne - 1), nil
+}
+
 func readUVarInt(r *bytes.Reader) (uint64, error) {
 	value, err := binary.ReadUvarint(r)
 	if err != nil {
 		return 0, err
 	}
 	return value, nil
+}
+
+func readUUID(r *bytes.Reader) ([16]byte, error) {
+	var id [16]byte
+	if _, err := io.ReadFull(r, id[:]); err != nil {
+		return [16]byte{}, err
+	}
+	return id, nil
 }

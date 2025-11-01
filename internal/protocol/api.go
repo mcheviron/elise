@@ -59,6 +59,8 @@ func (r SupportedRange) Contains(v int16) bool {
 // IsFlexibleRequest reports whether the given API key/version pair uses the flexible request header.
 func IsFlexibleRequest(key APIKey, version int16) bool {
 	switch key {
+	case APIKeyFetch:
+		return version >= 12
 	case APIKeyDescribeTopicPartitions:
 		return true
 	default:
@@ -76,4 +78,6 @@ const (
 	ErrorCodeUnsupportedVersion ErrorCode = 35
 	// ErrorCodeUnknownTopicOrPartition indicates the requested topic or partition does not exist.
 	ErrorCodeUnknownTopicOrPartition ErrorCode = 3
+	// ErrorCodeUnknownTopicID indicates the requested topic ID is unknown to the broker.
+	ErrorCodeUnknownTopicID ErrorCode = 100
 )
