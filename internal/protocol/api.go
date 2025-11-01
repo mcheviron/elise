@@ -56,8 +56,8 @@ func (r SupportedRange) Contains(v int16) bool {
 	return v >= r.Min && v <= r.Max
 }
 
-// IsFlexibleRequest reports whether the given API key/version pair uses the flexible request header.
-func IsFlexibleRequest(key APIKey, version int16) bool {
+// isFlexibleRequest reports whether the given API key/version pair uses the flexible request header.
+func isFlexibleRequest(key APIKey, version int16) bool {
 	switch key {
 	case APIKeyFetch:
 		return version >= 12

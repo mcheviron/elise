@@ -104,6 +104,26 @@ func (c *Cluster) TopicByID(id [16]byte) (*Topic, bool) {
 	return topic, ok
 }
 
+// Topics returns all topics sorted by name then UUID.
+func (c *Cluster) Topics() []*Topic {
+	if c == nil {
+		return nil
+	}
+	list := make([]*Topic, 0, len(c.topicsByID))
+	for _, t := range c.topicsByID {
+		list = append(list, t)
+	}
+	sort.Slice(list, func(i, j int) bool {
+		nameI := list[i].Name
+		nameJ := list[j].Name
+		if nameI != nameJ {
+			return nameI < nameJ
+		}
+		return bytes.Compare(list[i].ID[:], list[j].ID[:]) < 0
+	})
+	return list
+}
+
 // PartitionList returns partitions sorted by partition id.
 func (t *Topic) PartitionList() []*Partition {
 	list := make([]*Partition, 0, len(t.Partitions))

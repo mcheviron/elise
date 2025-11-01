@@ -8,7 +8,7 @@
 ## Development Commands
 
 - Always prefer `just` targets: `just build`, `just run`, `just fmt`, `just test`, `just check`.
-- Install tooling once via `just install` (Go 1.25.3).
+- Install tooling once via `just install`.
 - After making code changes, run `just check` before delivering output.
 
 ## Coding Style

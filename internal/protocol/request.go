@@ -73,7 +73,7 @@ func parseRequestHeader(r *bytes.Reader) (RequestHeaderV2, error) {
 	}
 
 	apiKey := APIKey(rawKey)
-	flexible := IsFlexibleRequest(apiKey, apiVersion)
+	flexible := isFlexibleRequest(apiKey, apiVersion)
 
 	var clientID string
 	var taggedFields []TaggedField
