@@ -5,6 +5,8 @@ package protocol
 type APIKey int16
 
 const (
+	// APIKeyFetch corresponds to the Fetch RPC.
+	APIKeyFetch APIKey = 1
 	// APIKeyAPIVersions corresponds to the ApiVersions RPC.
 	APIKeyAPIVersions APIKey = 18
 	// APIKeyDescribeTopicPartitions corresponds to DescribeTopicPartitions RPC.
@@ -32,6 +34,11 @@ var APIVersionsSupportedRange = SupportedRange{
 
 // SupportedAPIs enumerates the APIs exposed by this broker.
 var SupportedAPIs = []APIVersionRange{
+	{
+		APIKey:     APIKeyFetch,
+		MinVersion: 0,
+		MaxVersion: 16,
+	},
 	{
 		APIKey:     APIKeyAPIVersions,
 		MinVersion: APIVersionsSupportedRange.Min,
