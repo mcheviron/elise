@@ -1,7 +1,9 @@
 package broker
 
 import (
+	"bytes"
 	"log"
+	"sort"
 
 	"github.com/mcheviron/elise/internal/metadata"
 )
@@ -17,6 +19,23 @@ func (s *Server) buildDescribeTopicPartitionsResponse(req *DescribeTopicPartitio
 	topics := make([]DescribeTopicPartitionsResponseTopic, 0, len(req.Topics))
 	for _, topic := range req.Topics {
 		topics = append(topics, buildTopicResponse(cluster, topic))
+	}
+
+	if len(topics) > 1 {
+		sort.Slice(topics, func(i, j int) bool {
+			nameI := ""
+			if topics[i].Name != nil {
+				nameI = *topics[i].Name
+			}
+			nameJ := ""
+			if topics[j].Name != nil {
+				nameJ = *topics[j].Name
+			}
+			if nameI == nameJ {
+				return bytes.Compare(topics[i].TopicID[:], topics[j].TopicID[:]) < 0
+			}
+			return nameI < nameJ
+		})
 	}
 
 	return DescribeTopicPartitionsResponse{
