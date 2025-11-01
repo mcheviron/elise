@@ -117,6 +117,12 @@ func (s *Server) handleConnection(conn net.Conn) {
 				log.Printf("failed to send DescribeTopicPartitions response to %s: %v", peer, err)
 				return
 			}
+		case protocol.APIKeyFetch:
+			body := buildFetchResponse(req.Header.APIVersion).Encode()
+			if err := sendResponse(conn, header, body); err != nil {
+				log.Printf("failed to send Fetch response to %s: %v", peer, err)
+				return
+			}
 		default:
 			log.Printf("unsupported api key %d; closing connection", req.Header.APIKey)
 			return
@@ -162,5 +168,19 @@ func buildAPIVersionsResponse(requestedVersion int16) protocol.APIVersionsRespon
 		resp.APIVersions = make([]protocol.APIVersionRange, len(protocol.SupportedAPIs))
 		copy(resp.APIVersions, protocol.SupportedAPIs)
 	}
+	return resp
+}
+
+func buildFetchResponse(requestedVersion int16) protocol.FetchResponseV16 {
+	resp := protocol.FetchResponseV16{
+		ThrottleTimeMS: 0,
+		SessionID:      0,
+	}
+	if requestedVersion != 16 {
+		resp.ErrorCode = protocol.ErrorCodeUnsupportedVersion
+		return resp
+	}
+
+	resp.ErrorCode = protocol.ErrorCodeNone
 	return resp
 }
